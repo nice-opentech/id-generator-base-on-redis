@@ -2321,7 +2321,7 @@ void mgetidCommand(redisClient *c) {
     if (getLongLongFromObjectOrReply(c, c->argv[1], &num, NULL) != REDIS_OK) {
         return;
     }
-    if (num <= 0 || num > 1000) {
+    if (num <= 0 || num > 100) {
         addReplyErrorFormat(c, "parameters error! argv[1] = %lld", num);
         return;
     }
