@@ -137,7 +137,7 @@ typedef long long mstime_t; /* millisecond time type. */
 #define ACTIVE_EXPIRE_CYCLE_FAST 1
 
 /* id generator */
-#define ID_START_TIMESTAMP 1420041600 /**< 2015-01-01 00:00:00 milliseconds */
+#define ID_START_TIMESTAMP 1420041600000 /**< 2015-01-01 00:00:00 milliseconds */
 #define ID_SHARD_NUM 2048 // 1>>11
 #define ID_MAX_SEQ_ID 1024 // 1>>10
 
