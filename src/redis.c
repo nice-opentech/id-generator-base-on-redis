@@ -2297,10 +2297,8 @@ int time_independent_strcmp(char *a, char *b) {
     return diff; /* If zero strings are the same. */
 }
 
-static long long generateId(long long t) {
-    if (t == 0) {
-        t = mstime();
-    }
+static long long generateId() {
+    long long t = mstime();
     long long id = t << 21;
     id |= server.cur_shard << 10;
     id |= server.shards[server.cur_shard];
@@ -2313,7 +2311,7 @@ static long long generateId(long long t) {
 }
 
 void getidCommand(redisClient *c) {
-    addReplyLongLong(c, generateId(0));
+    addReplyLongLong(c, generateId());
 }
 
 void mgetidCommand(redisClient *c) {
@@ -2325,10 +2323,9 @@ void mgetidCommand(redisClient *c) {
         addReplyErrorFormat(c, "parameters error! argv[1] = %lld", num);
         return;
     }
-    long long t = mstime();
     addReplyMultiBulkLen(c, num);
     for (int i = 0; i < num; i++) {
-        addReplyBulkLongLong(c, generateId(t));
+        addReplyBulkLongLong(c, generateId());
     }
 }
 
