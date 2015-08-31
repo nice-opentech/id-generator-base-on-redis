@@ -2302,6 +2302,12 @@ static long long generateId() {
     long long id = t << 21;
     id |= server.cur_shard << 10;
     id |= server.shards[server.cur_shard];
+    redisLog(REDIS_DEBUG,
+             "id=%lld, time=%lld, shard=%d, seq=%d",
+             id,
+             t,
+             server.cur_shard,
+             server.shards[server.cur_shard]);
     server.shards[server.cur_shard] = (server.shards[server.cur_shard]+1) % ID_MAX_SEQ_ID;
     if (server.shards[server.cur_shard] == 0) {
         server.cur_shard++;
