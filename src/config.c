@@ -502,6 +502,19 @@ void loadServerConfigFromString(char *config) {
                 err = sentinelHandleConfiguration(argv+1,argc-1);
                 if (err) goto loaderr;
             }
+        } else if (!strcasecmp(argv[0],"id-shard-range")) {
+            if (argc != 3) {
+                err = "id-shard-range requires 3 parameters";
+                goto loaderr;
+            }
+            int min_shard = atoi(argv[1]);
+            int max_shard = atoi(argv[2]);
+            if (min_shard < 0 || max_shard >= ID_SHARD_NUM || min_shard > max_shard) {
+                err = "id-shard-range have error parameters";
+                goto loaderr;
+            }
+            server.min_shard = min_shard;
+            server.max_shard = max_shard;
         } else {
             err = "Bad directive or wrong number of arguments"; goto loaderr;
         }

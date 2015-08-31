@@ -118,6 +118,8 @@ struct redisServer server; /* server global state */
  *    are not fast commands.
  */
 struct redisCommand redisCommandTable[] = {
+    {"getid",getidCommand,1,"rF",0,NULL,1,1,1,0,0},
+    {"mgetid",mgetidCommand,2,"rF",0,NULL,1,1,1,0,0},
     {"get",getCommand,2,"rF",0,NULL,1,1,1,0,0},
     {"set",setCommand,-3,"wm",0,NULL,1,1,1,0,0},
     {"setnx",setnxCommand,3,"wmF",0,NULL,1,1,1,0,0},
@@ -1453,6 +1455,9 @@ void initServerConfig(void) {
     server.assert_line = 0;
     server.bug_report_start = 0;
     server.watchdog_period = 0;
+
+    /// id generator
+    server.min_shard = server.max_shard = 0;
 }
 
 /* This function will try to raise the max number of open files accordingly to
@@ -1659,6 +1664,10 @@ void initServer(void) {
             server.syslog_facility);
     }
 
+    // id generator
+    memset(server.shards, 0, sizeof(server.shards));
+    server.cur_shard = server.min_shard;
+    
     server.current_client = NULL;
     server.clients = listCreate();
     server.clients_to_close = listCreate();
@@ -2288,6 +2297,41 @@ int time_independent_strcmp(char *a, char *b) {
     return diff; /* If zero strings are the same. */
 }
 
+static long long generateId(long long t) {
+    if (t == 0) {
+        t = mstime();
+    }
+    long long id = t << 21;
+    id |= server.cur_shard << 10;
+    id |= server.shards[server.cur_shard];
+    server.shards[server.cur_shard] = (server.shards[server.cur_shard]+1) % ID_MAX_SEQ_ID;
+    server.cur_shard++;
+    if (server.cur_shard > server.max_shard) {
+        server.cur_shard = server.min_shard;
+    }
+    return id;
+}
+
+void getidCommand(redisClient *c) {
+    addReplyLongLong(c, generateId(0));
+}
+
+void mgetidCommand(redisClient *c) {
+    long long num = 1;
+    if (getLongLongFromObjectOrReply(c, c->argv[1], &num, NULL) != REDIS_OK) {
+        return;
+    }
+    if (num <= 0 || num > 1000) {
+        addReplyErrorFormat(c, "parameters error! argv[1] = %lld", num);
+        return;
+    }
+    long long t = mstime();
+    addReplyMultiBulkLen(c, num);
+    for (int i = 0; i < num; i++) {
+        addReplyBulkLongLong(c, generateId(t));
+    }
+}
+
 void authCommand(redisClient *c) {
     if (!server.requirepass) {
         addReplyError(c,"Client sent AUTH, but no password is set");
@@ -2497,7 +2541,9 @@ sds genRedisInfoString(char *section) {
             "uptime_in_days:%jd\r\n"
             "hz:%d\r\n"
             "lru_clock:%ld\r\n"
-            "config_file:%s\r\n",
+            "config_file:%s\r\n"
+            "id_min_shard:%d\r\n"
+            "id_max_shard:%d\r\n",
             REDIS_VERSION,
             redisGitSHA1(),
             strtol(redisGitDirty(),NULL,10) > 0,
@@ -2518,7 +2564,9 @@ sds genRedisInfoString(char *section) {
             (intmax_t)(uptime/(3600*24)),
             server.hz,
             (unsigned long) server.lruclock,
-            server.configfile ? server.configfile : "");
+            server.configfile ? server.configfile : "",
+            server.min_shard,
+            server.max_shard);
     }
 
     /* Clients */

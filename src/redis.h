@@ -136,6 +136,11 @@ typedef long long mstime_t; /* millisecond time type. */
 #define ACTIVE_EXPIRE_CYCLE_SLOW 0
 #define ACTIVE_EXPIRE_CYCLE_FAST 1
 
+/* id generator */
+#define ID_START_TIMESTAMP 1420041600 /**< 2015-01-01 00:00:00 milliseconds */
+#define ID_SHARD_NUM 1<<11
+#define ID_MAX_SEQ_ID 1<<10
+
 /* Instantaneous metrics tracking. */
 #define REDIS_METRIC_SAMPLES 16     /* Number of samples per metric. */
 #define REDIS_METRIC_COMMAND 0      /* Number of commands executed. */
@@ -833,6 +838,12 @@ struct redisServer {
     int assert_line;
     int bug_report_start; /* True if bug report header was already logged. */
     int watchdog_period;  /* Software watchdog period in ms. 0 = off */
+
+    /* id generator */
+    int shards[ID_SHARD_NUM];
+    int cur_shard;
+    int min_shard;
+    int max_shard;
 };
 
 typedef struct pubsubPattern {
@@ -1422,6 +1433,8 @@ void pfcountCommand(redisClient *c);
 void pfmergeCommand(redisClient *c);
 void pfdebugCommand(redisClient *c);
 void latencyCommand(redisClient *c);
+void getidCommand(redisClient *c);
+void mgetidCommand(redisClient *c);
 
 #if defined(__GNUC__)
 void *calloc(size_t count, size_t size) __attribute__ ((deprecated));
