@@ -138,8 +138,8 @@ typedef long long mstime_t; /* millisecond time type. */
 
 /* id generator */
 #define ID_START_TIMESTAMP 1420041600 /**< 2015-01-01 00:00:00 milliseconds */
-#define ID_SHARD_NUM 1<<11
-#define ID_MAX_SEQ_ID 1<<10
+#define ID_SHARD_NUM 2048 // 1>>11
+#define ID_MAX_SEQ_ID 1024 // 1>>10
 
 /* Instantaneous metrics tracking. */
 #define REDIS_METRIC_SAMPLES 16     /* Number of samples per metric. */
