@@ -2298,7 +2298,7 @@ int time_independent_strcmp(char *a, char *b) {
 }
 
 static long long generateId() {
-    long long t = mstime();
+    long long t = (mstime() - ID_START_TIMESTAMP);
     long long id = t << 21;
     id |= server.cur_shard << 10;
     id |= server.shards[server.cur_shard];
