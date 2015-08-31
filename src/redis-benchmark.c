@@ -714,6 +714,16 @@ int main(int argc, const char **argv) {
             free(cmd);
         }
 
+        if (test_is_selected("getid")) {
+            benchmark("GETID","GETID\r\n",7);
+        }
+
+        if (test_is_selected("mgetid")) {
+            len = redisFormatCommand(&cmd, "MGETID 10");
+            benchmark("MGETID",cmd,len);
+            free(cmd);
+        }
+        
         if (test_is_selected("set")) {
             len = redisFormatCommand(&cmd,"SET key:__rand_int__ %s",data);
             benchmark("SET",cmd,len);
