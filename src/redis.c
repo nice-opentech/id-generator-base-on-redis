@@ -2303,9 +2303,11 @@ static long long generateId() {
     id |= server.cur_shard << 10;
     id |= server.shards[server.cur_shard];
     server.shards[server.cur_shard] = (server.shards[server.cur_shard]+1) % ID_MAX_SEQ_ID;
-    server.cur_shard++;
-    if (server.cur_shard > server.max_shard) {
-        server.cur_shard = server.min_shard;
+    if (server.shards[server.cur_shard] == 0) {
+        server.cur_shard++;
+        if (server.cur_shard > server.max_shard) {
+            server.cur_shard = server.min_shard;
+        }
     }
     return id;
 }
