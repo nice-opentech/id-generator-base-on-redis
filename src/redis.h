@@ -840,6 +840,7 @@ struct redisServer {
     int watchdog_period;  /* Software watchdog period in ms. 0 = off */
 
     /* id generator */
+    long long id_last_time; 
     int shards[ID_SHARD_NUM];
     int cur_shard;
     int min_shard;

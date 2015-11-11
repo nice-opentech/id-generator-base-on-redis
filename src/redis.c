@@ -1667,7 +1667,8 @@ void initServer(void) {
     // id generator
     memset(server.shards, 0, sizeof(server.shards));
     server.cur_shard = server.min_shard;
-    
+
+    server.id_last_time = 0;
     server.current_client = NULL;
     server.clients = listCreate();
     server.clients_to_close = listCreate();
@@ -2299,6 +2300,12 @@ int time_independent_strcmp(char *a, char *b) {
 
 static long long generateId() {
     long long t = (mstime() - ID_START_TIMESTAMP);
+    if (t != server.id_last_time) {
+        // new time
+        server.cur_shard = server.min_shard;
+        server.shards[server.cur_shard] = 0;
+        server.id_last_time = t;
+    }
     long long id = t << 21;
     id |= server.cur_shard << 10;
     id |= server.shards[server.cur_shard];
@@ -2314,6 +2321,7 @@ static long long generateId() {
         if (server.cur_shard > server.max_shard) {
             server.cur_shard = server.min_shard;
         }
+        server.shards[server.cur_shard] = 0;
     }
     return id;
 }
