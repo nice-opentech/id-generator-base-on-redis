@@ -1455,9 +1455,6 @@ void initServerConfig(void) {
     server.assert_line = 0;
     server.bug_report_start = 0;
     server.watchdog_period = 0;
-
-    /// id generator
-    server.min_shard = server.max_shard = 0;
 }
 
 /* This function will try to raise the max number of open files accordingly to
@@ -1665,10 +1662,14 @@ void initServer(void) {
     }
 
     // id generator
-    memset(server.shards, 0, sizeof(server.shards));
-    server.cur_shard = server.min_shard;
+    server.shard_max = 1 << server.shard_range;
+    server.cur_shard = 0;
 
+    server.cur_random = 0;
+    server.random_sequence_max = 1 << server.random_range;
     server.id_last_time = 0;
+
+
     server.current_client = NULL;
     server.clients = listCreate();
     server.clients_to_close = listCreate();
@@ -2299,30 +2300,75 @@ int time_independent_strcmp(char *a, char *b) {
 }
 
 static long long generateId() {
-    long long t = (mstime() - ID_START_TIMESTAMP);
-    if (t != server.id_last_time) {
-        // new time
-        server.cur_shard = server.min_shard;
-        server.shards[server.cur_shard] = 0;
-        server.id_last_time = t;
+    long long current_time = (mstime() - ID_START_TIMESTAMP);
+    long long shard_passed_relate_current = 0, shard_future_relate_current = 0;
+
+    if(current_time != server.id_last_time){
+        shard_passed_relate_current = (current_time - server.id_last_time) << server.shard_range;
+
+        /** 
+         * if (shard_future_relate_current > 0) {
+         *      we have borrowed some ms from future
+         * } eles if (shard_future_relate_current < 0){
+         *      duration from last time to current time, no request
+         * } else if (shard_future_relate_current == 0){
+         *      last time shard range has run out, so the new ms can service and not borrow ms from future
+         * }
+         * so server.cur_shard = maxInt(0, shard_future_relate_current) mean:
+         *  if(shard_future_relate_current > 0) {
+         *      we have borrowed some ms, so the real_used_time will plus borrowed ms ->  
+         *          real_used_time = current_time + floor(server.cur_shard / server.shard_max);
+         *  } else if(shard_future_relate_current <=0){
+         *      some has passed ms not used, so ignore it and record from current
+         *  }
+         */
+        shard_future_relate_current = server.cur_shard - shard_passed_relate_current;
+        server.cur_shard = shard_future_relate_current > 0 ? shard_future_relate_current : 0;
+        server.id_last_time = current_time;
     }
-    long long id = t << 21;
-    id |= server.cur_shard << 10;
-    id |= server.shards[server.cur_shard];
+
+    /**
+     * generate id
+     * should plus has borrowed ms from future
+     */
+    long long real_used_time = current_time + floor(server.cur_shard / server.shard_max);
+    long long id = real_used_time << 21;
+    id |= server.server_id << (21 - server.id_range);
+    id |= server.cur_shard << (21 - server.id_range - server.shard_range);
+    id |= server.random_sequences[server.cur_random];
+    
+    int borrow = real_used_time != current_time ? 1 : 0;
+    long long borrow_ms_in_future = real_used_time - current_time;
     redisLog(REDIS_DEBUG,
-             "id=%lld, time=%lld, shard=%d, seq=%d",
+             "id=%lld, ctime=%lld, rtime=%lld, bms=%lld, shard=%lld, rand=%d, sprc=%lld, sfrc=%lld, borrow=%d",
              id,
-             t,
+             current_time,
+             real_used_time,
+             borrow_ms_in_future,
              server.cur_shard,
-             server.shards[server.cur_shard]);
-    server.shards[server.cur_shard] = (server.shards[server.cur_shard]+1) % ID_MAX_SEQ_ID;
-    if (server.shards[server.cur_shard] == 0) {
-        server.cur_shard++;
-        if (server.cur_shard > server.max_shard) {
-            server.cur_shard = server.min_shard;
-        }
-        server.shards[server.cur_shard] = 0;
+             server.random_sequences[server.cur_random],
+             shard_passed_relate_current,
+             shard_future_relate_current,
+             borrow
+    );
+    if(id < 0 || real_used_time != current_time){
+        redisLog(REDIS_WARNING,
+                "warning > id=%lld, ctime=%lld, rtime=%lld, bms=%lld, shard=%lld, rand=%d, sprc=%lld, sfrc=%lld, borrow=%d",
+                id,
+                current_time,
+                real_used_time,
+                borrow_ms_in_future,
+                server.cur_shard,
+                server.random_sequences[server.cur_random],
+                shard_passed_relate_current,
+                shard_future_relate_current,
+                borrow
+        );
     }
+
+    //rotate server.cur_random
+    server.cur_random = (server.cur_random + 1) % server.random_sequence_max;
+    server.cur_shard ++;
     return id;
 }
 
@@ -2554,9 +2600,11 @@ sds genRedisInfoString(char *section) {
             "uptime_in_days:%jd\r\n"
             "hz:%d\r\n"
             "lru_clock:%ld\r\n"
-            "config_file:%s\r\n"
-            "id_min_shard:%d\r\n"
-            "id_max_shard:%d\r\n",
+            "server_id:%d\r\n"
+            "id_range:%d\r\n"
+            "shard_range:%d\r\n"
+            "random_range:%d\r\n"
+            "config_file:%s\r\n",
             REDIS_VERSION,
             redisGitSHA1(),
             strtol(redisGitDirty(),NULL,10) > 0,
@@ -2577,9 +2625,11 @@ sds genRedisInfoString(char *section) {
             (intmax_t)(uptime/(3600*24)),
             server.hz,
             (unsigned long) server.lruclock,
-            server.configfile ? server.configfile : "",
-            server.min_shard,
-            server.max_shard);
+            server.server_id,
+            server.id_range,
+            server.shard_range,
+            server.random_range,
+            server.configfile ? server.configfile : "");
     }
 
     /* Clients */

@@ -502,19 +502,72 @@ void loadServerConfigFromString(char *config) {
                 err = sentinelHandleConfiguration(argv+1,argc-1);
                 if (err) goto loaderr;
             }
-        } else if (!strcasecmp(argv[0],"id-shard-range")) {
-            if (argc != 3) {
-                err = "id-shard-range requires 3 parameters";
+        } else if (!strcasecmp(argv[0],"id-generator")) {
+            if (argc != 9) {
+                err = "[id-generator] >> requires 8 parameters";
                 goto loaderr;
             }
-            int min_shard = atoi(argv[1]);
-            int max_shard = atoi(argv[2]);
-            if (min_shard < 0 || max_shard >= ID_SHARD_NUM || min_shard > max_shard) {
-                err = "id-shard-range have error parameters";
+            int server_id, id_range, shard_range, random_range;
+            if(!strcasecmp(argv[1], "server-id")){
+                server_id = atoi(argv[2]);
+            } else {
+                err = "[id-generator] >> the first argv is server-id";
                 goto loaderr;
             }
-            server.min_shard = min_shard;
-            server.max_shard = max_shard;
+            if(!strcasecmp(argv[3], "id-range")){
+                id_range = atoi(argv[4]);
+            } else {
+                err = "[id-generator] >>  the third argv is id-range";
+                goto loaderr;
+            }
+            if(!strcasecmp(argv[5], "shard-range")){
+                shard_range = atoi(argv[6]);
+            } else {
+                err = "[id-generator] >> the fifth argv is shard-range";
+                goto loaderr;
+            }
+            if(!strcasecmp(argv[7], "random-range")){
+                random_range = atoi(argv[8]);
+            } else {
+                err = "[id-generator] >> the seventh argv is random-range";
+                goto loaderr;
+            }
+            if(server_id < 0 || id_range <= 0 || shard_range <= 0 || random_range <= 0 || (id_range + shard_range + random_range) != 21){
+                err = "[id-generator] >> arg: server-id is wrong or the sum (id-range + shard-range + random-range) != 21"; 
+                goto loaderr;
+            }
+            int max_server_id = (1 << id_range) - 1;
+            if(server_id > max_server_id){
+                err = "[id-generator] >>  server_id and id-range is wrong, server-id more than the max of id-range"; 
+                goto loaderr;
+            }
+            server.server_id = server_id;
+            server.id_range = id_range;
+            server.shard_range = shard_range;
+            server.random_range = random_range;
+            
+            //generate random sequence
+            int *random_sequences;
+            int random_sequences_count = 1 << random_range;
+            random_sequences = (int*)calloc(random_sequences_count ,sizeof(int));
+            memset(random_sequences, 0, sizeof(int) * random_sequences_count);
+            int i, j, m, n, tmp;
+            for(i = 0; i < random_sequences_count; i ++ ){
+                random_sequences[i]  = i;
+            }
+            // random sequences numbers 
+            srand((unsigned int)time(NULL));
+            for(j = 0; j < random_sequences_count * 2 ; j++){
+                m = rand() % random_sequences_count;
+                n = rand() % random_sequences_count;
+                if(n == m){
+                    continue;
+                }
+                tmp = random_sequences[m];
+                random_sequences[m] = random_sequences[n];
+                random_sequences[n]= tmp;
+            }
+            server.random_sequences = random_sequences;
         } else {
             err = "Bad directive or wrong number of arguments"; goto loaderr;
         }

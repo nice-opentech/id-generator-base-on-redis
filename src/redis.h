@@ -841,10 +841,18 @@ struct redisServer {
 
     /* id generator */
     long long id_last_time; 
-    int shards[ID_SHARD_NUM];
-    int cur_shard;
-    int min_shard;
-    int max_shard;
+
+    int server_id;
+    int id_range;
+
+    int shard_range;
+    long long cur_shard;
+    int shard_max;
+
+    int random_range;
+    int random_sequence_max;
+    int *random_sequences;
+    int cur_random;
 };
 
 typedef struct pubsubPattern {
